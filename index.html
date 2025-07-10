@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>フォートナイト建築練習シミュレーター</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+    
+    :root {
+      --primary: #00b0f4;
+      --secondary: #ff66c3;
+      --dark: #1a1a2e;
+      --light: #f5f5f5;
+    }
+    
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: var(--dark);
+      color: var(--light);
+      overflow-x: hidden;
+    }
+    
+    .building-area {
+      perspective: 1000px;
+      transform-style: preserve-3d;
+      position: relative;
+      width: 100%;
+      height: 60vh;
+      background-color: #0f1923;
+      overflow: hidden;
+      border-radius: 8px;
+      box-shadow: 0 0 20px rgba(0, 176, 244, 0.3);
+    }
+    
+    .ground {
+      position: absolute;
+      bottom: 0;
+      width: 300%;
+      height: 100px;
+      background-image: linear-gradient(to right, 
+        #2a5c45 0%, #1e3a29 20%, 
+        #2a5c45 40%, #1e3a29 60%, 
+        #2a5c45 80%, #1e3a29 100%);
+      transform: rotateX(80deg) translateZ(-100px) translateX(-33%);
+      transform-origin: bottom;
+    }
+    
+    .wall {
+      position: absolute;
+      background-color: #b8864a;
+      border: 2px solid #8B4513;
+      transition: transform 0.2s ease-out;
+    }
+    
+    .ramp {
+      position: absolute;
+      background-color: #b8864a;
+      border: 2px solid #8B4513;
+      clip-path: polygon(0% 100%, 100% 100%, 100% 0%);
+      transition: transform 0.2s ease-out;
+    }
+    
+    .floor {
+      position: absolute;
+      background-color: #b8864a;
+      border: 2px solid #8B4513;
+      transition: transform 0.2s ease-out;
+    }
+    
+    .player {
+      position: absolute;
+      width: 30px;
+      height: 60px;
+      background-color: var(--secondary);
+      border-radius: 4px;
+      transition: all 0.1s ease-out;
+      z-index: 100;
+    }
+    
+    .target {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background-color: red;
+      opacity: 0.7;
+      z-index: 90;
+    }
+    
+    @keyframes pulse {
+      0% { opacity: 0.6; }
+      50% { opacity: 1; }
+      100% { opacity: 0.6; }
+    }
+    
+    .highlight {
+      animation: pulse 1.5s infinite;
+    }
+    
+    .key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      background-color: #333;
+      color: white;
+      border-radius: 5px;
+      margin: 5px;
+      font-weight: bold;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+    
+    .keyboard {
+      margin-top: 20px;
+    }
+    
+    .key-row {
+      display: flex;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div class="container mx-auto px-4 py-8">
+    <div class="flex flex-col items-center">
+      <h1 class="text-4xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-pink-500">
+        フォートナイト建築練習シミュレーター
+      </h1>
+      <p class="text-lg mb-8 text-gray-300">
+        WASDで移動、マウスクリックで建築！スピードアップしてプロのように建築しよう！
+      </p>
+      
+      <div class="w-full max-w-6xl">
+        <div class="flex justify-between items-center mb-4">
+          <div class="flex space-x-4">
+            <div class="bg-gray-800 rounded-lg px-4 py-2">
+              <span class="text-gray-400">タイマー:</span>
+              <span id="timer" class="text-white font-mono">00:00.00</span>
+            </div>
+            <div class="bg-gray-800 rounded-lg px-4 py-2">
+              <span class="text-gray-400">建築数:</span>
+              <span id="build-count" class="text-white font-mono">0</span>
+            </div>
+            <div class="bg-gray-800 rounded-lg px-4 py-2">
+              <span class="text-gray-400">モード:</span>
+              <select id="build-mode" class="bg-gray-700 text-white rounded px-2">
+                <option value="wall">壁 (F1)</option>
+                <option value="ramp">階段 (F2)</option>
+                <option value="floor">床 (F3)</option>
+              </select>
+            </div>
+          </div>
+          <button id="reset-btn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition">
+            リセット (R)
+          </button>
+        </div>
+        
+        <div class="building-area" id="building-area">
+          <div class="ground"></div>
+          <div class="player" id="player"></div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+          <div class="bg-gray-800 rounded-lg p-6">
+            <h2 class="text-xl font-semibold mb-4 text-blue-400">操作方法</h2>
+            <div class="space-y-4">
+              <div>
+                <h3 class="font-medium text-pink-400">移動</h3>
+                <div class="keyboard">
+                  <div class="key-row">
+                    <div id="w-key" class="key">W</div>
+                  </div>
+                  <div class="key-row">
+                    <div id="a-key" class="key">A</div>
+                    <div id="s-key" class="key">S</div>
+                    <div id="d-key" class="key">D</div>
+                  </div>
+                  <div class="key-row mt-2">
+                    <div class="key">SPACE</div>
+                    <span class="text-gray-300 self-center ml-2">- ジャンプ</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <h3 class="font-medium text-pink-400">建築</h3>
+                <div class="flex flex-wrap items-center">
+                  <div id="mouse-left" class="key">LMB</div>
+                  <span class="text-gray-300 ml-2">- 建築/編集</span>
+                </div>
+                <div class="flex flex-wrap items-center mt-2">
+                  <div id="mouse-right" class="key">RMB</div>
+                  <span class="text-gray-300 ml-2">- 建築の回転</span>
+                </div>
+              </div>
+              
+              <div>
+                <h3 class="font-medium text-pink-400">クイック切り替え</h3>
+                <div class="flex flex-wrap gap-2">
+                  <div id="f1-key" class="key">F1</div>
+                  <span class="text-gray-300 self-center">- 壁</span>
+                  <div id="f2-key" class="key">F2</div>
+                  <span class="text-gray-300 self-center">- 階段</span>
+                  <div id="f3-key" class="key">F3</div>
+                  <span class="text-gray-300 self-center">- 床</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="bg-gray-800 rounded-lg p-6">
+            <h2 class="text-xl font-semibold mb-4 text-blue-400">練習メニュー</h2>
+            <div class="space-y-3">
+              <button class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg text-left transition flex justify-between items-center">
+                <span>基本壁建築</span>
+                <span class="text-xs bg-black bg-opacity-30 px-2 py-1 rounded">練習</span>
+              </button>
+              <button class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg text-left transition flex justify-between items-center">
+                <span>90度回転建築</span>
+                <span class="text-xs bg-black bg-opacity-30 px-2 py-1 rounded">中級</span>
+              </button>
+              <button class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg text-left transition flex justify-between items-center">
+                <span>階段ラッシュ</span>
+                <span class="text-xs bg-black bg-opacity-30 px-2 py-1 rounded">上級</span>
+              </button>
+              <button class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg text-left transition flex justify-between items-center">
+                <span>複合建築</span>
+                <span class="text-xs bg-black bg-opacity-30 px-2 py-1 rounded">プロ</span>
+              </button>
+            </div>
+            
+            <div class="mt-6 pt-4 border-t border-gray-700">
+              <h3 class="font-medium text-pink-400 mb-2">練習のコツ</h3>
+              <ul class="text-gray-300 space-y-2 text-sm">
+                <li class="flex items-start">
+                  <span class="text-blue-400 mr-2">✓</span>
+                  <span>最初は遅くても正確に、徐々にスピードアップ</span>
+                </li>
+                <li class="flex items-start">
+                  <span class="text-blue-400 mr-2">✓</span>
+                  <span>キーボードを見ないで操作できるよう練習</span>
+                </li>
+                <li class="flex items-start">
+                  <span class="text-blue-400 mr-2">✓</span>
+                  <span>毎日10分でも継続的に練習</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // ゲーム要素
+      const buildingArea = document.getElementById('building-area');
+      const player = document.getElementById('player');
+      const timerDisplay = document.getElementById('timer');
+      const buildCountDisplay = document.getElementById('build-count');
+      const buildModeSelect = document.getElementById('build-mode');
+      const resetBtn = document.getElementById('reset-btn');
+      
+      // キー表示要素
+      const wKey = document.getElementById('w-key');
+      const aKey = document.getElementById('a-key');
+      const sKey = document.getElementById('s-key');
+      const dKey = document.getElementById('d-key');
+      const f1Key = document.getElementById('f1-key');
+      const f2Key = document.getElementById('f2-key');
+      const f3Key = document.getElementById('f3-key');
+      const mouseLeft = document.getElementById('mouse-left');
+      const mouseRight = document.getElementById('mouse-right');
+      
+      // ゲーム状態
+      let playerX = 400;
+      let playerY = 200;
+      let playerZ = 0;
+      let playerSpeed = 5;
+      let isJumping = false;
+      let jumpHeight = 0;
+      let maxJumpHeight = 100;
+      let gravity = 2;
+      let buildCount = 0;
+      let startTime = Date.now();
+      let buildings = [];
+      let currentBuildMode = 'wall';
+      let buildRotation = 0;
+      let keysPressed = {};
+      
+      // プレイヤーの初期位置設定
+      function initPlayer() {
+        player.style.left = `${playerX - 15}px`;
+        player.style.bottom = `${playerY}px`;
+        player.style.transform = `translateZ(${playerZ}px)`;
+      }
+      
+      // タイマー更新
+      function updateTimer() {
+        const elapsed = Date.now() - startTime;
+        const minutes = Math.floor(elapsed / 60000);
+        const seconds = Math.floor((elapsed % 60000) / 1000);
+        const milliseconds = Math.floor((elapsed % 1000) / 10);
+        
+        timerDisplay.textContent = 
+          `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+      }
+      
+      // 建築カウンター更新
+      function updateBuildCount() {
+        buildCountDisplay.textContent = buildCount;
+      }
+      
+      // 建築モード変更
+      function changeBuildMode(mode) {
+        currentBuildMode = mode;
+        buildModeSelect.value = mode;
+      }
+      
+      // 建築物作成
+      function createBuilding(x, y) {
+        const buildingSize = 50;
+        let building;
+        
+        switch(currentBuildMode) {
+          case 'wall':
+            building = document.createElement('div');
+            building.className = 'wall';
+            building.style.width = `${buildingSize}px`;
+            building.style.height = `${buildingSize * 2}px`;
+            
+            if (buildRotation === 90 || buildRotation === 270) {
+              building.style.width = `${buildingSize * 2}px`;
+              building.style.height = `${buildingSize}px`;
+            }
+            break;
+            
+          case 'ramp':
+            building = document.createElement('div');
+            building.className = 'ramp';
+            building.style.width = `${buildingSize}px`;
+            building.style.height = `${buildingSize}px`;
+            
+            if (buildRotation === 90) {
+              building.style.transform = 'rotateY(0deg) rotateX(0deg) rotateZ(90deg)';
+            } else if (buildRotation === 180) {
+              building.style.transform = 'rotateY(0deg) rotateX(0deg) rotateZ(180deg)';
+            } else if (buildRotation === 270) {
+              building.style.transform = 'rotateY(0deg) rotateX(0deg) rotateZ(270deg)';
+            }
+            break;
+            
+          case 'floor':
+            building = document.createElement('div');
+            building.className = 'floor';
+            building.style.width = `${buildingSize * 2}px`;
+            building.style.height = `${buildingSize * 2}px`;
+            break;
+        }
+        
+        building.style.left = `${x - buildingSize/2}px`;
+        building.style.bottom = `${y}px`;
+        building.style.transform += ` rotateY(${buildRotation}deg)`;
+        
+        buildingArea.appendChild(building);
+        buildings.push(building);
+        buildCount++;
+        updateBuildCount();
+        
+        // 建築アニメーション
+        building.style.opacity = '0';
+        building.style.transform += ' translateY(20px)';
+        
+        setTimeout(() => {
+          building.style.transition = 'opacity 0.2s, transform 0.3s';
+          building.style.opacity = '1';
+          building.style.transform = building.style.transform.replace('translateY(20px)', '');
+        }, 10);
+      }
+      
+      // リセットゲーム
+      function resetGame() {
+        buildings.forEach(building => building.remove());
+        buildings = [];
+        buildCount = 0;
+        startTime = Date.now();
+        playerX = 400;
+        playerY = 200;
+        playerZ = 0;
+        buildRotation = 0;
+        initPlayer();
+        updateBuildCount();
+      }
+      
+      // キーボードイベント
+      function handleKeyDown(e) {
+        keysPressed[e.key.toLowerCase()] = true;
+        
+        // キーハイライト
+        if (e.key.toLowerCase() === 'w') wKey.classList.add('bg-blue-500');
+        if (e.key.toLowerCase() === 'a') aKey.classList.add('bg-blue-500');
+        if (e.key.toLowerCase() === 's') sKey.classList.add('bg-blue-500');
+        if (e.key.toLowerCase() === 'd') dKey.classList.add('bg-blue-500');
+        if (e.key.toLowerCase() === ' ') { /* スペースバー */ }
+        
+        // 建築モード切り替え
+        if (e.key === 'F1') {
+          changeBuildMode('wall');
+          f1Key.classList.add('bg-blue-500');
+        }
+        if (e.key === 'F2') {
+          changeBuildMode('ramp');
+          f2Key.classList.add('bg-blue-500');
+        }
+        if (e.key === 'F3') {
+          changeBuildMode('floor');
+          f3Key.classList.add('bg-blue-500');
+        }
+        
+        // リセット
+        if (e.key.toLowerCase() === 'r') {
+          resetGame();
+        }
+        
+        // 建築回転
+        if (e.key.toLowerCase() === 'e') {
+          buildRotation = (buildRotation + 90) % 360;
+        }
+      }
+      
+      function handleKeyUp(e) {
+        keysPressed[e.key.toLowerCase()] = false;
+        
+        // キーハイライト解除
+        if (e.key.toLowerCase() === 'w') wKey.classList.remove('bg-blue-500');
+        if (e.key.toLowerCase() === 'a') aKey.classList.remove('bg-blue-500');
+        if (e.key.toLowerCase() === 's') sKey.classList.remove('bg-blue-500');
+        if (e.key.toLowerCase() === 'd') dKey.classList.remove('bg-blue-500');
+        if (e.key === 'F1') f1Key.classList.remove('bg-blue-500');
+        if (e.key === 'F2') f2Key.classList.remove('bg-blue-500');
+        if (e.key === 'F3') f3Key.classList.remove('bg-blue-500');
+      }
+      
+      // マウスイベント
+      function handleMouseDown(e) {
+        if (e.button === 0) { // 左クリック
+          mouseLeft.classList.add('bg-blue-500');
+          createBuilding(e.clientX, buildingArea.offsetHeight - (e.clientY - buildingArea.getBoundingClientRect().top));
+        } else if (e.button === 2) { // 右クリック
+          mouseRight.classList.add('bg-blue-500');
+          buildRotation = (buildRotation + 90) % 360;
+        }
+      }
+      
+      function handleMouseUp(e) {
+        if (e.button === 0) { // 左クリック
+          mouseLeft.classList.remove('bg-blue-500');
+        } else if (e.button === 2) { // 右クリック
+          mouseRight.classList.remove('bg-blue-500');
+        }
+      }
+      
+      // ジャンプ処理
+      function jump() {
+        if (!isJumping) {
+          isJumping = true;
+          jumpHeight = 0;
+        }
+      }
+      
+      // ゲームループ
+      function gameLoop() {
+        // プレイヤー移動
+        if (keysPressed['w']) {
+          playerY += playerSpeed;
+        }
+        if (keysPressed['s']) {
+          playerY -= playerSpeed;
+        }
+        if (keysPressed['a']) {
+          playerX -= playerSpeed;
+        }
+        if (keysPressed['d']) {
+          playerX += playerSpeed;
+        }
+        
+        // ジャンプ処理
+        if (keysPressed[' ']) {
+          jump();
+        }
+        
+        if (isJumping) {
+          jumpHeight += 5;
+          playerZ = jumpHeight;
+          
+          if (jumpHeight >= maxJumpHeight) {
+            isJumping = false;
+          }
+        } else if (playerZ > 0) {
+          playerZ -= gravity;
+          if (playerZ < 0) playerZ = 0;
+        }
+        
+        // 境界チェック
+        playerX = Math.max(15, Math.min(playerX, buildingArea.offsetWidth - 15));
+        playerY = Math.max(0, Math.min(playerY, buildingArea.offsetHeight - 60));
+        
+        // プレイヤー位置更新
+        player.style.left = `${playerX - 15}px`;
+        player.style.bottom = `${playerY}px`;
+        player.style.transform = `translateZ(${playerZ}px)`;
+        
+        // タイマー更新
+        updateTimer();
+        
+        requestAnimationFrame(gameLoop);
+      }
+      
+      // イベントリスナー設定
+      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('keyup', handleKeyUp);
+      buildingArea.addEventListener('mousedown', handleMouseDown);
+      document.addEventListener('mouseup', handleMouseUp);
+      buildModeSelect.addEventListener('change', (e) => changeBuildMode(e.target.value));
+      resetBtn.addEventListener('click', resetGame);
+      
+      // 右クリックメニュー無効化
+      buildingArea.addEventListener('contextmenu', (e) => e.preventDefault());
+      
+      // 初期化
+      initPlayer();
+      gameLoop();
+      
+      // ゲーム開始
+      startTime = Date.now();
+    });
+  </script>
+</body>
+</html>
+
